@@ -14,7 +14,7 @@ CLEANFILES = org.mpris.MediaPlayer2.squeezebox.service slimpris2.py slimpris2
 edit = sed -e 's|@bindir[@]|$(bindir)|g' \
 	   -e 's|@datadir[@]|$(datadir)|g'
 
-mpDris2: Makefile
+slimpris2: Makefile
 	rm -f $@ $@.tmp
 	$(MKDIR_P) $(@D)
 	srcdir=''
@@ -23,7 +23,7 @@ mpDris2: Makefile
 	mv $@.tmp $@
 	ln -sf $@ $@.py
 
-org.mpris.MediaPlayer2.mpd.service: Makefile
+org.mpris.MediaPlayer2.squeezebox.service: Makefile
 	rm -f $@ $@.tmp
 	$(MKDIR_P) $(@D)
 	srcdir=''
