@@ -847,6 +847,8 @@ if __name__ == '__main__':
         params['host'] = config.get('Connection', 'host')
     if config.has_option('Connection', 'port'):
         params['port'] = config.get('Connection', 'port')
+    if config.has_option('Connection', 'mac'):
+        params['mac'] = config.get('Connection', 'mac')
     if config.has_option('Connection', 'password'):
         params['password'] = config.get('Connection', 'password')
     if config.has_option('Connection', 'music_dir'):
