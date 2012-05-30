@@ -877,14 +877,15 @@ if __name__ == '__main__':
     logging.basicConfig(format=log_format, level=log_level)
     logger = logging.getLogger('slimpris2')
 
-    if not len(args) == 3:
-        usage(params)
-        sys.exit()
-
-    if args[1].isdigit():
+    if len(args) == 3 and args[1].isdigit():
         params['host'] = args[0]
         params['port'] = int(args[1])
         params['mac'] = args[2]
+    elif len(args) == 0:
+        pass
+    else:
+        usage(params)
+        sys.exit()
 
     if path and os.path.exists(path):
         logger.info('Using %s as music library path' % path)
