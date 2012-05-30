@@ -9,5 +9,4 @@ Type=Application
 Categories=Audio;Music;Player;
 NoDisplay=true
 X-DBUS-ServiceName=org.mpris.MediaPlayer2.squeezebox
-Name[nl_NL]=slimpris2.desktop
 
