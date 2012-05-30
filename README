@@ -1,13 +1,13 @@
-# mpDris2
+# slimpris2
 
-mpDris2 provide MPRIS 2 support to mpd (Music Play Daemon).
+slimpris2 provide MPRIS 2 support for squeezebox/squeezeslave.
 
-mpDris2 is run in the user session and monitors a local or distant mpd server.
+slimpris2 is run in the user session and monitors a local or distant Logitech Media Server.
 
 # Installation
 
-  git clone git://github.com/eonpatapon/mpDris2.git
-  cd mpDris2
+  git clone git://github.com/terual/slimpris2.git
+  cd slimpris2
   ./autogen.sh
   ./configure --sysconfdir=/etc
   make install (as root)
@@ -17,9 +17,9 @@ Default prefix is /usr/local.
 
 # Configuration
 
-By default, mpDris2 will try to connect to localhost:6600.
+By default, slimpris2 will try to connect to localhost:9000.
 
 To set a different host or port copy the example configuration file 
-/usr/[local]/share/doc/mpdris2/mpDris2.conf to ~/.config/mpDris2/mpDris2.conf.
+/usr/[local]/share/doc/slimpris2/slimpris2.conf to ~/.config/slimpris2/slimpris2.conf.
 
-Restart your session or mpDris2 after changing mpDris2.conf.
+Restart your session or slimpris2 after changing slimpris2.conf.

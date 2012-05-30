@@ -16,3 +16,4 @@ sysconfdirwarning:
 	fi
 
 .PHONY = sysconfdirwarning
+

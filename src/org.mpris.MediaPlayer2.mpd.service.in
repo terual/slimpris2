@@ -1,3 +1,0 @@
-[D-BUS Service]
-Name=org.mpris.MediaPlayer2.mpd
-Exec=@bindir@/mpDris2
