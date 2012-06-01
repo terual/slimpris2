@@ -352,6 +352,9 @@ class SBWrapper():
 
             if old_status['playlist repeat'] != self._status['playlist repeat']:
                 self._dbus_service.update_property('org.mpris.MediaPlayer2.Player', 'LoopStatus')
+                
+            if old_status['playlist_loop'] != self._status['playlist_loop']:
+                self._dbus_service.update_property('org.mpris.MediaPlayer2.TrackList', 'Tracks')
 
         # Return True to continue polling
         return True
@@ -467,7 +470,15 @@ class MPRISInterface(dbus.service.Object):
             return True
 
     def __get_metadata():
-        return format_metadata(lms.metadata())
+        index = sb_wrapper._status['playlist_cur_index']
+        try:
+            index = int(index)
+        except:
+            return
+        if index >= 0:
+            track_id = sb_wrapper._status['playlist_loop'][index]['id']
+            return format_metadata(lms.metadata(track_id))
+        return
 
     def __get_volume():
         #vol = float(lms.get_volume())
@@ -524,10 +535,8 @@ class MPRISInterface(dbus.service.Object):
         status = sb_wrapper._status
         tracklist = []
         if status.has_key('playlist_loop'):
-            tracklist = [None*len(status['playlist_loop'])]
             for track in status['playlist_loop']:
-                tracklist[status['playlist index']] = dbus.ObjectPath("/org/mpris/MediaPlayer2/TrackList/%s" % track['playlist index'])
-        print tracklist
+                tracklist.append(dbus.ObjectPath("/org/mpris/MediaPlayer2/TrackList/%s" % track['playlist index']))
         return dbus.Array(tracklist, signature="o")
 
     __tracklist_interface = "org.mpris.MediaPlayer2.TrackList"
@@ -672,7 +681,12 @@ class MPRISInterface(dbus.service.Object):
     # Tracklist methods
     @dbus.service.method(__tracklist_interface, in_signature='ao', out_signature='aa{sv}')
     def GetTracksMetadata(self, track_ids):
-        return
+        metadata = []
+        for tracklist_id in track_ids:
+            tracklist_id = int(str(tracklist_id).replace('/org/mpris/MediaPlayer2/TrackList/', ''))
+            track_id = sb_wrapper._status['playlist_loop'][tracklist_id]['id']
+            metadata.append(format_metadata(lms.metadata(track_id)))
+        return dbus.Array(metadata, signature="a{sv}")
 
     @dbus.service.method(__tracklist_interface, in_signature='sob', out_signature='')
     def AddTrack(self, uri, after_track, set_as_current):
@@ -680,13 +694,18 @@ class MPRISInterface(dbus.service.Object):
 
     @dbus.service.method(__tracklist_interface, in_signature='o', out_signature='')
     def RemoveTrack(self, track_id):
+        track_id = str(track_id).replace('/org/mpris/MediaPlayer2/TrackList/', '')
+        try:
+            lms.playlist_remove(int(track_id))
+        except:
+            pass
         return
 
     @dbus.service.method(__tracklist_interface, in_signature='o', out_signature='')
     def GoTo(self, track_id):
         track_id = str(track_id).replace('/org/mpris/MediaPlayer2/TrackList/', '')
         try:
-            lms.goto(int(track_id))
+            lms.playlist_goto(int(track_id))
         except:
             pass
         return
@@ -776,9 +795,9 @@ class LMSConnection:
         info = self.query(self.player_id, "status", "0", None, "tags:")
         return info
     
-    def metadata(self):
-        path = self.get_track_path()
-        songinfo = self.query(self.player_id, "songinfo", "0", None, "url:%s" % path)
+    def metadata(self, track_id):
+        #path = self.get_track_path()
+        songinfo = self.query(self.player_id, "songinfo", "0", None, "track_id:%s" % track_id )
         return songinfo['songinfo_loop']
 
     def get_track_path(self):
@@ -854,8 +873,12 @@ class LMSConnection:
         # 0 no shuffle, 1 shuffle songs, 2 shuffle albums. 
         return self.query(self.player_id, "playlist", "shuffle", num)
         
-    def goto(self, playlist_index):
+    def playlist_goto(self, playlist_index):
         return self.query(self.player_id, "playlist", "index", playlist_index)
+
+    def playlist_remove(self, playlist_index):
+        return self.query(self.player_id, "playlist", "delete", playlist_index) 
+
 
 class JSONConnection(LMSConnection):
 
@@ -869,7 +892,11 @@ class JSONConnection(LMSConnection):
     def query(self, player_id, *args):
         params = simplejson.dumps({'id':1, 'method':'slim.request', 'params':[player_id, list(args)]})
         req = urllib2.Request(self.server_url, params)
-        response = urllib2.urlopen(req)
+        try:
+            response = urllib2.urlopen(req)
+        except:
+            logging.error("Error, query: %s", list(args))
+            return
         response_txt = response.read()
         result = simplejson.loads(response_txt)['result']
         logging.debug("query: %s, result: %s", list(args), result)
