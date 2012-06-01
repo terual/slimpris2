@@ -300,9 +300,9 @@ class SBWrapper():
         self._status = lms.get_playing_info()
         # Invalid some fields to throw events at start
         self._status['mode'] = 'invalid'
-        self._status['playlist_cur_index'] = '-1'
         if self._status.has_key('playlist_loop'):
-            self._status['playlist_loop'][0]['title'] = 'invalid'
+            self._status['playlist_loop'][int(self._status['playlist_cur_index'])]['title'] = 'invalid'
+        self._status['playlist_cur_index'] = '-1'
         self._position = 0
 
     def monitor(self):
@@ -320,7 +320,7 @@ class SBWrapper():
 
             if self._status['mode'] == 'play':
                 if (old_status['playlist_cur_index'] != self._status['playlist_cur_index']) or \
-                   (old_status['playlist_loop'][int(old_status['playlist_cur_index'])-1]['id'] != self._status['playlist_loop'][int(self._status['playlist_cur_index'])-1]['id']):
+                   (old_status['playlist_loop'][int(old_status['playlist_cur_index'])]['id'] != self._status['playlist_loop'][int(self._status['playlist_cur_index'])]['id']):
                     metadata = self._dbus_service.update_property('org.mpris.MediaPlayer2.Player', 'Metadata')
                     if self._params['notify']:
                         uri = 'sound'
@@ -353,8 +353,9 @@ class SBWrapper():
             if old_status['playlist repeat'] != self._status['playlist repeat']:
                 self._dbus_service.update_property('org.mpris.MediaPlayer2.Player', 'LoopStatus')
                 
-            if old_status['playlist_loop'] != self._status['playlist_loop']:
-                self._dbus_service.update_property('org.mpris.MediaPlayer2.TrackList', 'Tracks')
+            if old_status.has_key('playlist_loop') and self._status.has_key('playlist_loop'):
+                if old_status['playlist_loop'] != self._status['playlist_loop']:
+                    self._dbus_service.update_property('org.mpris.MediaPlayer2.TrackList', 'Tracks')
 
         # Return True to continue polling
         return True
@@ -470,9 +471,8 @@ class MPRISInterface(dbus.service.Object):
             return True
 
     def __get_metadata():
-        index = sb_wrapper._status['playlist_cur_index']
         try:
-            index = int(index)
+            index = int(sb_wrapper._status['playlist_cur_index'])
         except:
             return
         if index >= 0:
@@ -709,6 +709,11 @@ class MPRISInterface(dbus.service.Object):
         except:
             pass
         return
+
+    @dbus.service.signal(__tracklist_interface, signature='ao')
+    def TrackListReplaced(self, tracklist):
+        logging.debug("Tracklist replaced: %s", tracklist)
+        return tracklist
 
 # Handle signals more gracefully
 def handle_sigint(signum, frame):
