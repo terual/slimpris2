@@ -526,7 +526,7 @@ class MPRISInterface(dbus.service.Object):
         if status.has_key('playlist_loop'):
             tracklist = [None*len(status['playlist_loop'])]
             for track in status['playlist_loop']:
-                tracklist[status['playlist index']] = dbus.ObjectPath("/org/mpris/MediaPlayer2/Track/%s" % track['id'])
+                tracklist[status['playlist index']] = dbus.ObjectPath("/org/mpris/MediaPlayer2/TrackList/%s" % track['playlist index'])
         print tracklist
         return dbus.Array(tracklist, signature="o")
 
@@ -667,6 +667,28 @@ class MPRISInterface(dbus.service.Object):
     @dbus.service.method(__player_interface, in_signature='', out_signature='')
     def OpenUri(self):
         # TODO
+        return
+
+    # Tracklist methods
+    @dbus.service.method(__tracklist_interface, in_signature='ao', out_signature='aa{sv}')
+    def GetTracksMetadata(self, track_ids):
+        return
+
+    @dbus.service.method(__tracklist_interface, in_signature='sob', out_signature='')
+    def AddTrack(self, uri, after_track, set_as_current):
+        return
+
+    @dbus.service.method(__tracklist_interface, in_signature='o', out_signature='')
+    def RemoveTrack(self, track_id):
+        return
+
+    @dbus.service.method(__tracklist_interface, in_signature='o', out_signature='')
+    def GoTo(self, track_id):
+        track_id = str(track_id).replace('/org/mpris/MediaPlayer2/TrackList/', '')
+        try:
+            lms.goto(int(track_id))
+        except:
+            pass
         return
 
 # Handle signals more gracefully
@@ -831,6 +853,9 @@ class LMSConnection:
     def set_shuffle(self, num):
         # 0 no shuffle, 1 shuffle songs, 2 shuffle albums. 
         return self.query(self.player_id, "playlist", "shuffle", num)
+        
+    def goto(self, playlist_index):
+        return self.query(self.player_id, "playlist", "index", playlist_index)
 
 class JSONConnection(LMSConnection):
 
