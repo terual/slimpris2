@@ -194,6 +194,14 @@ MPRIS2_INTROSPECTION = \
       <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="false"/>
     </property>
   </interface>
+  <interface name="org.mpris.MediaPlayer2.TrackList">
+    <property name="Tracks" type="ao" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+    <property name="CanEditTracks" type="b" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+  </interface>
 </node>"""
 
 
@@ -419,7 +427,7 @@ class MPRISInterface(dbus.service.Object):
         "CanQuit": (False, None),
         "CanRaise": (False, None),
         "DesktopEntry": ("Squeezebox", None),
-        "HasTrackList": (False, None),
+        "HasTrackList": (True, None),
         "Identity": (identity, None),
         "SupportedUriSchemes": (dbus.Array(signature="s"), None),
         "SupportedMimeTypes": (dbus.Array(signature="s"), None)
@@ -512,9 +520,24 @@ class MPRISInterface(dbus.service.Object):
         "CanControl": (True, None),
     }
 
+    def __get_tracklist():
+        status = sb_wrapper._status
+        tracklist = []
+        if status.has_key('playlist_loop'):
+            tracklist = [None*len(status['playlist_loop'])]
+            for track in status['playlist_loop']:
+                tracklist[status['playlist index']] = dbus.ObjectPath("/org/mpris/MediaPlayer2/Track/%s" % track['id'])
+        print tracklist
+        return dbus.Array(tracklist, signature="o")
+
     __tracklist_interface = "org.mpris.MediaPlayer2.TrackList"
+    __tracklist_props = {
+        "Tracks": (__get_tracklist, None),
+        "CanEditTracks": (False, None),
+    }
 
     __prop_mapping = {
+        __tracklist_interface: __tracklist_props,
         __player_interface: __player_props,
         __root_interface: __root_props}
 
@@ -627,8 +650,7 @@ class MPRISInterface(dbus.service.Object):
     @dbus.service.method(__player_interface, in_signature='ox', out_signature='')
     def SetPosition(self, trackid, position):
         song = sb_wrapper._status #lms.get_playing_info()
-        # FIXME: use real dbus objects
-        if str(trackid) != '/org/mpris/MediaPlayer2/Track/%s' % song['id']: return
+        if trackid != dbus.ObjectPath('/org/mpris/MediaPlayer2/Track/%s' % song['id']): return
         # Convert position to seconds
         position = float(position) / 1000000
         logger.debug("SetPosition: %i, %i" % (position, int(song['time'])))
