@@ -31,8 +31,11 @@ import dbus.service
 from dbus.mainloop.glib import DBusGMainLoop
 import ConfigParser
 import logging
+
+import urllib #for quote and unquote
 import simplejson
 import urllib2
+import telnetlib
 
 import gettext
 gettext.bindtextdomain('slimpris2', '@datadir@/locale')
@@ -286,18 +289,19 @@ class SBWrapper():
 
     def init_state(self):
         # Get current state
-        self._status = json.get_playing_info()
+        self._status = lms.get_playing_info()
         # Invalid some fields to throw events at start
         self._status['mode'] = 'invalid'
         self._status['playlist_cur_index'] = '-1'
-        self._status['playlist_loop'][0]['title'] = 'invalid'
+        if self._status.has_key('playlist_loop'):
+            self._status['playlist_loop'][0]['title'] = 'invalid'
         self._position = 0
 
     def monitor(self):
         old_status = self._status
         old_position = self._position
 
-        self._status = json.get_playing_info()
+        self._status = lms.get_playing_info()
 
         if type(self._status) == type(dict()):
 
@@ -350,17 +354,17 @@ class SBWrapper():
         if key == 'Play':
             if self._status['mode'] == 'play':
                 notification.rnotify(identity, _('Paused'))
-                json.pause()
+                lms.pause()
             else:
                 notification.rnotify(identity, _('Playing'))
-                json.play()
+                lms.play()
         elif key == 'Next':
-            json.next()
+            lms.next()
         elif key == 'Previous':
-            json.prev()
+            lms.prev()
         elif key == 'Stop':
             notification.rnotify(identity, _('Stopped'))
-            json.stop()
+            lms.stop()
 
 
 class Notify:
@@ -427,17 +431,17 @@ class MPRISInterface(dbus.service.Object):
 
     def __set_loop_status(value):
         if str(value) == "Playlist":
-            json.set_repeat(2)
+            lms.set_repeat(2)
         elif str(value) == "Track":
-            json.set_repeat(1)
+            lms.set_repeat(1)
         elif str(value) == "None":
-            json.set_repeat(0)
+            lms.set_repeat(0)
         else:
             raise dbus.exceptions.DBusException("Loop mode not supported")
         return
 
     def __get_loop_status():
-        #if json.get_repeat() == '0':
+        #if lms.get_repeat() == '0':
         if sb_wrapper._status['playlist repeat'] == '0':
             return False
         else:
@@ -448,17 +452,17 @@ class MPRISInterface(dbus.service.Object):
         return
 
     def __get_shuffle():
-        #if json.get_shuffle() == '0':
+        #if lms.get_shuffle() == '0':
         if sb_wrapper._status['playlist shuffle'] == '0':
             return False
         else:
             return True
 
     def __get_metadata():
-        return format_metadata(json.metadata())
+        return format_metadata(lms.metadata())
 
     def __get_volume():
-        #vol = float(json.get_volume())
+        #vol = float(lms.get_volume())
         vol = float(sb_wrapper._status['mixer volume'])
         if vol > 0:
             return vol / 100
@@ -467,23 +471,23 @@ class MPRISInterface(dbus.service.Object):
 
     def __set_volume(value):
         if value >= 0 and value <= 1:
-            json.set_volume(int(value * 100))
+            lms.set_volume(int(value * 100))
         return
 
     def __get_position():
-        #position = json.get_position()
+        #position = lms.get_position()
         position = sb_wrapper._status['time']
         return dbus.Int64(int(position * 1000000))
 
     def __can_next():
-        status = sb_wrapper._status #json.get_playing_info()
+        status = sb_wrapper._status #lms.get_playing_info()
         if 'playlist_cur_index' in status and 'playlist_tracks' in status:
             if int(status['playlist_cur_index']) < int(status['playlist_tracks']):
                 return True
         return False
 
     def __can_seek():
-        status = sb_wrapper._status #json.get_playing_info()
+        status = sb_wrapper._status #lms.get_playing_info()
         if 'can_seek' in status:
             if status['can_seek'] == 1:
                 return True
@@ -570,66 +574,66 @@ class MPRISInterface(dbus.service.Object):
     # Player methods
     @dbus.service.method(__player_interface, in_signature='', out_signature='')
     def Next(self):
-        json.next()
+        lms.next()
         return
 
     @dbus.service.method(__player_interface, in_signature='', out_signature='')
     def Previous(self):
-        json.prev()
+        lms.prev()
         return
 
     @dbus.service.method(__player_interface, in_signature='', out_signature='')
     def Pause(self):
-        json.pause()
+        lms.pause()
         notification.rnotify(identity, _('Paused'))
         return
 
     @dbus.service.method(__player_interface, in_signature='', out_signature='')
     def PlayPause(self):
-        status = json.get_mode()
+        status = lms.get_mode()
         if status == 'play':
-            json.pause()
+            lms.pause()
             notification.rnotify(identity, _('Paused'))
         else:
-            json.play()
+            lms.play()
             notification.rnotify(identity, _('Playing'))
         return
 
     @dbus.service.method(__player_interface, in_signature='', out_signature='')
     def Stop(self):
-        json.stop()
+        lms.stop()
         notification.rnotify(identity, _('Stopped'))
         return
 
     @dbus.service.method(__player_interface, in_signature='', out_signature='')
     def Play(self):
-        json.play()
+        lms.play()
         notification.notify(identity, _('Playing'))
         return
 
     @dbus.service.method(__player_interface, in_signature='x', out_signature='')
     def Seek(self, offset):
-        status = sb_wrapper._status #json.get_playing_info()
+        status = sb_wrapper._status #lms.get_playing_info()
         current = float(status['time'])
         end = float(status['duration'])
         offset = float(offset) / 1000000
         if current + offset <= end:
             position = current + offset
             if position < 0: position = 0
-            json.set_position(position)
+            lms.set_position(position)
             self.Seeked(position * 1000000)
         return
 
     @dbus.service.method(__player_interface, in_signature='ox', out_signature='')
     def SetPosition(self, trackid, position):
-        song = sb_wrapper._status #json.get_playing_info()
+        song = sb_wrapper._status #lms.get_playing_info()
         # FIXME: use real dbus objects
         if str(trackid) != '/org/mpris/MediaPlayer2/Track/%s' % song['id']: return
         # Convert position to seconds
         position = float(position) / 1000000
         logger.debug("SetPosition: %i, %i" % (position, int(song['time'])))
         if position <= int(song['time']):
-            json.set_position(position)
+            lms.set_position(position)
             self.Seeked(int(position * 1000000))
         return
 
@@ -716,23 +720,7 @@ def format_metadata(data):
     return dbus.Dictionary(metadata, signature='sv')
 
 
-class JSONConnection():
-
-    def __init__(self, params):
-        self.host = params['host']
-        self.port = params['port']
-        self.server_url = "http://%s:%s/jsonrpc.js" % (self.host, self.port)
-        self.player_id = params['mac']
-
-    def query(self, player_id, *args):
-        params = simplejson.dumps({'id':1, 'method':'slim.request', 'params':[player_id, list(args)]})
-        req = urllib2.Request(self.server_url, params)
-        response = urllib2.urlopen(req)
-        response_txt = response.read()
-        result = simplejson.loads(response_txt)['result']
-        logging.debug("query: %s, result: %s", list(args), result)
-        return result
-
+class LMSConnection:
     def get_coverart_url(self, track_id, size=None):
         if size:
             return "http://%s:%s/music/%s/cover_%sx%s_o" % (self.host, self.port, track_id, size, size)
@@ -822,6 +810,75 @@ class JSONConnection():
         # 0 no shuffle, 1 shuffle songs, 2 shuffle albums. 
         return self.query(self.player_id, "playlist", "shuffle", num)
 
+class JSONConnection(LMSConnection):
+
+    def __init__(self, params):
+        
+        self.host = params['host']
+        self.port = params['port']
+        self.server_url = "http://%s:%s/jsonrpc.js" % (self.host, self.port)
+        self.player_id = params['mac']
+
+    def query(self, player_id, *args):
+        params = simplejson.dumps({'id':1, 'method':'slim.request', 'params':[player_id, list(args)]})
+        req = urllib2.Request(self.server_url, params)
+        response = urllib2.urlopen(req)
+        response_txt = response.read()
+        result = simplejson.loads(response_txt)['result']
+        logging.debug("query: %s, result: %s", list(args), result)
+        return result
+
+class CLIConnection(LMSConnection):
+    
+    def __init__(self, params):
+        
+        self.host = params['host']
+        self.port = 9090
+        self.player_id = params['mac']
+        self._telnet = telnetlib.Telnet(self.host, self.port)
+
+    def login(self):
+        result = self.query("login", self.username, self.password)
+        self.logged_in = (result == "******")
+
+    def query(self, player_id, *args):
+        
+        req = player_id.encode('utf8') + ' '
+        for arg in args:
+            if arg:
+                req += arg.encode('utf8') + ' '
+        self._telnet.write(req + "\n")
+        response = self._telnet.read_until("\n")[:-1].decode('utf8')
+        
+        #logging.info("req: %s, response: %s", req, response)
+        print "REQ:", req
+        print "RES:", response
+        
+        split = response.split(' ')
+        result = {}
+        for n, item in enumerate(split):
+            item = urllib.unquote(item)
+            
+            if re.match("[0-9a-f]{2}([-:][0-9a-f]{2}){5}$", item.lower()):
+                result['player_id'] = item
+                
+            elif len(args) > n:
+                if args[n] == "?":
+                    print args[n], item
+
+            elif ":" in item:
+                key, value = item.split(":", 1)
+                try:
+                    if float(value)-int(value) == 0:
+                        result[key] = int(value)
+                    else:
+                        result[key] = float(value)
+                except:
+                    result[key] = value
+        print result
+        return result
+
+
 def usage(params):
     print """\
 Usage: %(progname)s [OPTION]... [LMS_HOST] [LMS_PORT] [PLAYER_MAC]
@@ -903,7 +960,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, handle_sigint)
 
     # Used to communicate with LMS
-    json = JSONConnection(params)
+    lms = JSONConnection(params)
 
     # Wrapper to send notifications
     notification = Notify(params)
