@@ -64,7 +64,7 @@ notification = None
 
 # MPRIS allowed metadata tags
 allowed_tags = {
-    'mpris:trackid': str,
+    'mpris:trackid': dbus.ObjectPath,
     'mpris:length': long,
     'mpris:artUrl': str,
     'xesam:album': str,
@@ -244,7 +244,7 @@ class SBWrapper():
         """ Try to connect to MPD """
         if self.my_connect():
             # If connection fail retry in 5 seconds
-            gobject.timeout_add(5000, self.my_connect)
+            gobject.timeout_add(1000, self.my_connect)
 
     def my_connect(self):
         """ Init MPD connection """
@@ -437,6 +437,8 @@ class MPRISInterface(dbus.service.Object):
     __root_props = {
         "CanQuit": (False, None),
         "CanRaise": (False, None),
+        "Fullscreen": (False, None),
+        "CanSetFullscreen": (False, None),
         "DesktopEntry": ("Squeezebox", None),
         "HasTrackList": (True, None),
         "Identity": (identity, None),
@@ -461,11 +463,13 @@ class MPRISInterface(dbus.service.Object):
 
     def __get_loop_status():
         #if lms.get_repeat() == '0':
-        if sb_wrapper._status['playlist repeat'] == '0':
-            return False
+        if sb_wrapper._status['playlist repeat'] == '2':
+            return "Playlist"
+        elif sb_wrapper._status['playlist repeat'] == '1':
+            return "Track"
         else:
-            return True
-        
+            return "None"
+            
     def __set_shuffle(value):
         # TODO
         return
@@ -484,7 +488,7 @@ class MPRISInterface(dbus.service.Object):
             return
         if index >= 0:
             track_id = sb_wrapper._status['playlist_loop'][index]['id']
-            return format_metadata(lms.metadata(track_id))
+            return format_metadata(lms.metadata(track_id), "Track")
         return
 
     def __get_volume():
@@ -523,13 +527,13 @@ class MPRISInterface(dbus.service.Object):
     __player_props = {
         "PlaybackStatus": (__get_playback_status, None),
         "LoopStatus": (__get_loop_status, __set_loop_status),
-        #~ "Rate": (1.0, None),
+        "Rate": (1.0, None),
         "Shuffle": (__get_shuffle, __set_shuffle),
         "Metadata": (__get_metadata, None),
         "Volume": (__get_volume, __set_volume),
         "Position": (__get_position, None),
-        #~ "MinimumRate": (1.0, None),
-        #~ "MaximumRate": (1.0, None),
+        "MinimumRate": (1.0, None),
+        "MaximumRate": (1.0, None),
         "CanGoNext": (__can_next, None),
         "CanGoPrevious": (True, None),
         "CanPlay": (True, None),
@@ -623,8 +627,10 @@ class MPRISInterface(dbus.service.Object):
 
     @dbus.service.method(__player_interface, in_signature='', out_signature='')
     def Pause(self):
-        lms.pause()
-        notification.rnotify(identity, _('Paused'))
+        status = lms.get_mode()
+        if status == 'play':
+            lms.pause()
+            notification.rnotify(identity, _('Paused'))
         return
 
     @dbus.service.method(__player_interface, in_signature='', out_signature='')
@@ -691,7 +697,7 @@ class MPRISInterface(dbus.service.Object):
         metadata = []
         for track_id in track_ids:
             track_id = int(str(track_id).replace('/org/mpris/MediaPlayer2/TrackList/', ''))
-            metadata.append(format_metadata(lms.metadata(track_id)))
+            metadata.append(format_metadata(lms.metadata(track_id), "TrackList"))
         return dbus.Array(metadata, signature="a{sv}")
 
     @dbus.service.method(__tracklist_interface, in_signature='sob', out_signature='')
@@ -724,7 +730,7 @@ def handle_sigint(signum, frame):
     logger.debug('Caught SIGINT, exiting.')
     loop.quit()
 
-def format_metadata(data):
+def format_metadata(data, context):
     """http://xmms2.org/wiki/MPRIS_Metadata"""
     
     metadata = {}
@@ -734,7 +740,7 @@ def format_metadata(data):
             metadata[key] = item[key]
 
     if 'id' in metadata:
-        metadata['mpris:trackid'] = "/org/mpris/MediaPlayer2/Track/%s" % metadata['id']
+        metadata['mpris:trackid'] = dbus.ObjectPath("/org/mpris/MediaPlayer2/%s/%s" % (context, metadata['id']))
 
     if 'duration' in metadata:
         metadata['mpris:length'] = int(float(metadata['duration']) * 1000000)
@@ -766,7 +772,7 @@ def format_metadata(data):
 
     if 'coverart' in metadata:
         if int(metadata['coverart']) == 1:
-            metadata['mpris:artUrl'] = "http://%s:%i/music/%s/cover_150x150.jpg" % (params['host'], params['port'], metadata['coverid'])
+            metadata['mpris:artUrl'] = "http://%s:%i/music/%s/cover_80x80.png" % (params['host'], params['port'], metadata['coverid'])
 
     # Stream: populate some missings tags with stream's name
     if 'name' in metadata:
