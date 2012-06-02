@@ -318,7 +318,7 @@ class SBWrapper():
             else:
                 self._position = 0
 
-            if self._status['mode'] == 'play':
+            if self._status['mode'] == 'play' and self._status.has_key('playlist_cur_index') and self._status.has_key('playlist_loop'):
                 if (old_status['playlist_cur_index'] != self._status['playlist_cur_index']) or \
                    (old_status['playlist_loop'][int(old_status['playlist_cur_index'])]['id'] != self._status['playlist_loop'][int(self._status['playlist_cur_index'])]['id']):
                     metadata = self._dbus_service.update_property('org.mpris.MediaPlayer2.Player', 'Metadata')
@@ -354,7 +354,14 @@ class SBWrapper():
                 self._dbus_service.update_property('org.mpris.MediaPlayer2.Player', 'LoopStatus')
                 
             if old_status.has_key('playlist_loop') and self._status.has_key('playlist_loop'):
-                if old_status['playlist_loop'] != self._status['playlist_loop']:
+                if len(old_status['playlist_loop'])+1 == len(self._status['playlist_loop']):
+                    # Track added
+                    pass
+                elif len(old_status['playlist_loop']) == len(self._status['playlist_loop'])+1:
+                    # Track removed
+                    pass
+                elif old_status['playlist_loop'] != self._status['playlist_loop']:
+                    # New TrackList
                     self._dbus_service.update_property('org.mpris.MediaPlayer2.TrackList', 'Tracks')
 
         # Return True to continue polling
@@ -536,7 +543,7 @@ class MPRISInterface(dbus.service.Object):
         tracklist = []
         if status.has_key('playlist_loop'):
             for track in status['playlist_loop']:
-                tracklist.append(dbus.ObjectPath("/org/mpris/MediaPlayer2/TrackList/%s" % track['playlist index']))
+                tracklist.append(dbus.ObjectPath("/org/mpris/MediaPlayer2/TrackList/%s" % track['id']))
         return dbus.Array(tracklist, signature="o")
 
     __tracklist_interface = "org.mpris.MediaPlayer2.TrackList"
@@ -682,9 +689,8 @@ class MPRISInterface(dbus.service.Object):
     @dbus.service.method(__tracklist_interface, in_signature='ao', out_signature='aa{sv}')
     def GetTracksMetadata(self, track_ids):
         metadata = []
-        for tracklist_id in track_ids:
-            tracklist_id = int(str(tracklist_id).replace('/org/mpris/MediaPlayer2/TrackList/', ''))
-            track_id = sb_wrapper._status['playlist_loop'][tracklist_id]['id']
+        for track_id in track_ids:
+            track_id = int(str(track_id).replace('/org/mpris/MediaPlayer2/TrackList/', ''))
             metadata.append(format_metadata(lms.metadata(track_id)))
         return dbus.Array(metadata, signature="a{sv}")
 
@@ -694,20 +700,18 @@ class MPRISInterface(dbus.service.Object):
 
     @dbus.service.method(__tracklist_interface, in_signature='o', out_signature='')
     def RemoveTrack(self, track_id):
-        track_id = str(track_id).replace('/org/mpris/MediaPlayer2/TrackList/', '')
-        try:
-            lms.playlist_remove(int(track_id))
-        except:
-            pass
+        track_id = int(str(track_id).replace('/org/mpris/MediaPlayer2/TrackList/', ''))
+        for track in sb_wrapper._status['playlist_loop']:
+            if int(track['id']) == track_id:
+                lms.playlist_remove(int(track['playlist index']))
         return
 
     @dbus.service.method(__tracklist_interface, in_signature='o', out_signature='')
     def GoTo(self, track_id):
-        track_id = str(track_id).replace('/org/mpris/MediaPlayer2/TrackList/', '')
-        try:
-            lms.playlist_goto(int(track_id))
-        except:
-            pass
+        track_id = int(str(track_id).replace('/org/mpris/MediaPlayer2/TrackList/', ''))
+        for track in sb_wrapper._status['playlist_loop']:
+            if int(track['id']) == track_id:
+                lms.playlist_goto(int(track['playlist index']))
         return
 
     @dbus.service.signal(__tracklist_interface, signature='ao')
