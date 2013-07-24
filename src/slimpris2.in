@@ -772,7 +772,7 @@ def format_metadata(data, context):
 
     if 'coverart' in metadata:
         if int(metadata['coverart']) == 1:
-            metadata['mpris:artUrl'] = "http://%s:%i/music/%s/cover_80x80.png" % (params['host'], params['port'], metadata['coverid'])
+            metadata['mpris:artUrl'] = "http://%s:%s/music/%s/cover_80x80.png" % (params['host'], params['port'], metadata['coverid'])
 
     # Stream: populate some missings tags with stream's name
     if 'name' in metadata:
