@@ -770,9 +770,9 @@ def format_metadata(data, context):
         if tag in metadata:
             metadata['xesam:%s' % tag] = metadata[tag]
 
-    if 'coverart' in metadata:
+    if 'coverart' in metadata and 'coverid' in metadata:
         if int(metadata['coverart']) == 1:
-            metadata['mpris:artUrl'] = "http://%s:%s/music/%s/cover_80x80.png" % (params['host'], params['port'], metadata['coverid'])
+            metadata['mpris:artUrl'] = lms.get_coverart_url(metadata['coverid'], 80)
 
     # Stream: populate some missings tags with stream's name
     if 'name' in metadata:
@@ -901,16 +901,38 @@ class JSONConnection(LMSConnection):
         
         self.host = params['host']
         self.port = params['port']
+        self.username = None
+        self.password = None
+        if 'username' in params:
+            self.username = params['username']
+        if 'password' in params:
+            self.password = params['password']
         self.server_url = "http://%s:%s/jsonrpc.js" % (self.host, self.port)
         self.player_id = params['mac']
+
+    def get_coverart_url(self, track_id, size=None):
+    
+        login = ""
+        if self.username and self.password:
+            login = "%s:%s@"%(self.username, self.password)
+    
+        if size:
+            return "http://%s%s:%s/music/%s/cover_%sx%s_o" % (login, self.host, self.port, track_id, size, size)
+        else:
+            return "http://%s%s:%s/music/%s/cover.jpg" % (login, self.host, self.port, track_id)
 
     def query(self, player_id, *args):
         params = simplejson.dumps({'id':1, 'method':'slim.request', 'params':[player_id, list(args)]})
         req = urllib2.Request(self.server_url, params)
+        
+        if self.username and self.password:
+            import base64
+            req.add_header('Authorization', b'Basic ' + base64.b64encode(self.username + b':' + self.password))
         try:
             response = urllib2.urlopen(req)
-        except:
-            logging.error("Error, query: %s", list(args))
+        except urllib2.HTTPError, error:
+            contents = error.read()
+            logging.error("Error, query: %s. %s", list(args), contents)
             return
         response_txt = response.read()
         result = simplejson.loads(response_txt)['result']
@@ -995,6 +1017,8 @@ if __name__ == '__main__':
         params['port'] = config.get('Connection', 'port')
     if config.has_option('Connection', 'mac'):
         params['mac'] = config.get('Connection', 'mac')
+    if config.has_option('Connection', 'username'):
+        params['username'] = config.get('Connection', 'username')
     if config.has_option('Connection', 'password'):
         params['password'] = config.get('Connection', 'password')
     if config.has_option('Connection', 'music_dir'):
